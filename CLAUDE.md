@@ -45,13 +45,13 @@ contract-fx/
 │   │   └── globals.css
 │   ├── components/
 │   │   ├── webcam/          # 웹캠 화면 출력, 권한 처리
-│   │   ├── landmarks/       # 랜드마크 오버레이(canvas) 렌더링
+│   │   ├── overlay/         # 랜드마크 오버레이(canvas) 렌더링
 │   │   ├── effects/         # 제스처 발동 시 애니메이션 이펙트
 │   │   └── debug/           # 개발용 디버그 패널 (감지 결과 텍스트 표시)
 │   ├── hooks/                # 브라우저 API를 감싸는 커스텀 훅 (useWebcam 등)
 │   └── lib/
 │       ├── mediapipe/       # HandLandmarker/PoseLandmarker 초기화 및 추론 래퍼
-│       ├── gestures/        # 제스처 판정 순수 함수 (여우 소환 / 슬래시 / 차지 등)
+│       ├── gestures/        # 제스처 판정 순수 함수 (docs/GESTURES.md 참고)
 │       └── types/            # 공용 타입 정의
 └── public/
     └── models/               # MediaPipe .task 모델 파일 (필요 시)
