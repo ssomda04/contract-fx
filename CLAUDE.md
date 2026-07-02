@@ -46,7 +46,8 @@ contract-fx/
 │   ├── components/
 │   │   ├── webcam/          # 웹캠 화면 출력, 권한 처리
 │   │   ├── landmarks/       # 랜드마크 오버레이(canvas) 렌더링
-│   │   └── effects/         # 제스처 발동 시 애니메이션 이펙트
+│   │   ├── effects/         # 제스처 발동 시 애니메이션 이펙트
+│   │   └── debug/           # 개발용 디버그 패널 (감지 결과 텍스트 표시)
 │   ├── hooks/                # 브라우저 API를 감싸는 커스텀 훅 (useWebcam 등)
 │   └── lib/
 │       ├── mediapipe/       # HandLandmarker/PoseLandmarker 초기화 및 추론 래퍼
