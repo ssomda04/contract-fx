@@ -38,19 +38,28 @@
 
 ## 1. 여우 소환 제스처
 
-**감지 대상:** 단일 손 (Hand Landmarker)
+**v4-a 구현 기준** (`src/lib/gestures/detectFoxSummon.ts`, 최초 초안보다 단순화됨):
+
+**감지 대상:** 검출된 손 중 조건을 가장 잘 만족하는 하나 (손 1개 이상 필요)
 
 **판정 조건 (매 프레임):**
 
-1. 검지 폄: `INDEX_TIP.y < INDEX_PIP.y`
-2. 중지 폄: `MIDDLE_TIP.y < MIDDLE_PIP.y`
-3. 약지 폄: `RING_TIP.y < RING_PIP.y`
-4. 엄지·새끼 맞닿음: `distance(THUMB_TIP, PINKY_TIP) < 0.05` (정규화 좌표 기준, 추후
-   `distance(WRIST, MIDDLE_MCP)` 대비 상대값으로 보정 검토 — 여우 머리 모양의 "귀 세 개 + 입"
-   실루엣을 의도)
+1. 검지 끝과 중지 끝이 모두 손목보다 위에 있음: `INDEX_TIP.y < WRIST.y && MIDDLE_TIP.y < WRIST.y`
+2. 검지 끝과 중지 끝이 서로 가까움: `distance(INDEX_TIP, MIDDLE_TIP) / handScale < 0.35`
+   (`handScale = max(distance(WRIST, INDEX_TIP), distance(WRIST, MIDDLE_TIP))` 로 정규화해
+   카메라와의 거리 변화 영향을 줄인다)
 
-**발동 조건:** 1~4를 **10프레임 이상 연속** 만족하면 `fox-summon` 이벤트 발동. 재발동까지
-쿨다운 1.5초.
+**신뢰도(confidence):** 정규화된 손끝 간 거리가 0에 가까울수록(완전히 붙음) 1.0, 임계값(0.35)에
+가까울수록 0.0으로 선형 스케일링.
+
+**상태 머신:** `idle`(손 없음) → `detecting`(손은 있으나 조건 불만족) → `holding`(조건 만족,
+경과 시간 누적) → 500ms 이상 유지되면 `triggered` 1회 발동(`fox-summon`) → 이후 1500ms
+`cooldown`. 쿨다운이 끝나면 조건이 계속 유지되고 있어도 `holding`부터 다시 시작한다(홀드 타이머
+리셋).
+
+**주의:** 이전 초안에 있던 "중지·약지 접힘 + 엄지·새끼 맞닿음(여우 귀 모양)" 조건은 v4-a에서는
+구현하지 않았다. 실제 카메라 테스트 결과에 따라 이후 버전에서 더 정교한 손모양 조건으로 대체될
+수 있다.
 
 **시각 이펙트 개요:**
 

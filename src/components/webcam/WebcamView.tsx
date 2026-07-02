@@ -2,6 +2,7 @@
 
 import { useWebcam } from "@/hooks/useWebcam";
 import { useHandLandmarker } from "@/hooks/useHandLandmarker";
+import { useGestureEngine } from "@/hooks/useGestureEngine";
 import { DebugPanel } from "@/components/debug/DebugPanel";
 import { LandmarkCanvas } from "@/components/overlay/LandmarkCanvas";
 
@@ -10,6 +11,10 @@ export function WebcamView() {
   const handLandmarker = useHandLandmarker({
     videoRef,
     isVideoReady: status === "ready",
+  });
+  const gesture = useGestureEngine({
+    result: handLandmarker.result,
+    timestampMs: handLandmarker.timestampMs,
   });
 
   return (
@@ -41,7 +46,7 @@ export function WebcamView() {
         )}
       </div>
 
-      <DebugPanel {...handLandmarker} />
+      <DebugPanel {...handLandmarker} gesture={gesture} />
     </div>
   );
 }
