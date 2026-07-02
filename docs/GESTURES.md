@@ -36,30 +36,46 @@
 
 ---
 
-## 1. 여우 소환 제스처
+## 1. 여우 소환 제스처 (fox summon hand sign)
 
-**v4-a 구현 기준** (`src/lib/gestures/detectFoxSummon.ts`, 최초 초안보다 단순화됨):
+**v4-a2 구현 기준** (`src/lib/gestures/detectFoxSummon.ts`). 특정 작품/캐릭터를 지칭하지 않는
+오리지널 손모양이며, 코드/문서에서는 "fox summon hand sign" 또는 "anime-inspired fox hand
+sign"으로만 표기한다.
+
+**손모양:** 검지와 새끼손가락은 여우 귀처럼 위로 펴고, 엄지·중지·약지는 서로 가까이 모아
+아래쪽에 고리(입 모양)를 만든다. 겉보기엔 락 사인(rock sign)과 비슷할 수 있지만, 엄지가
+중지·약지와 만나 고리를 이룬다는 점이 다르다.
 
 **감지 대상:** 검출된 손 중 조건을 가장 잘 만족하는 하나 (손 1개 이상 필요)
 
-**판정 조건 (매 프레임):**
+**판정 조건 (매 프레임, `handScale = distance(WRIST, MIDDLE_MCP)` 로 정규화):**
 
-1. 검지 끝과 중지 끝이 모두 손목보다 위에 있음: `INDEX_TIP.y < WRIST.y && MIDDLE_TIP.y < WRIST.y`
-2. 검지 끝과 중지 끝이 서로 가까움: `distance(INDEX_TIP, MIDDLE_TIP) / handScale < 0.35`
-   (`handScale = max(distance(WRIST, INDEX_TIP), distance(WRIST, MIDDLE_TIP))` 로 정규화해
-   카메라와의 거리 변화 영향을 줄인다)
+1. **검지 폄**: `distance(WRIST, INDEX_TIP)`이 `distance(WRIST, INDEX_PIP)`와
+   `distance(WRIST, INDEX_MCP) × 1.15`를 모두 충분히 넘어야 함 (연속값 score로 평가)
+2. **새끼 폄**: 검지와 동일한 방식으로 `PINKY_MCP/PIP/TIP` 기준 평가
+3. **중지 접힘 + 엄지에 근접**: 중지가 펴지지 않은 정도(1 − 폄 score)와, `THUMB_TIP`과의
+   정규화 거리가 가까운 정도를 함께 봄 (둘 다 만족해야 점수가 높음)
+4. **약지 접힘 + 엄지에 근접**: 약지도 동일하게 평가
+5. **루프 점수(loop score)**: `THUMB_TIP`, `MIDDLE_TIP`, `RING_TIP` 세 점의 평균 상호 거리가
+   `handScale`의 0.35 미만일수록 높은 점수 — 가장 중요한 조건 중 하나
+6. **락 사인 방지(anti-rock-sign)**: 엄지가 검지 쪽보다 위 루프(중지·약지) 쪽에 확실히 더
+   가까워야 함. 락 사인은 엄지가 고리를 이루지 않고 검지 옆에 머무르므로 이 조건에서 걸러짐
 
-**신뢰도(confidence):** 정규화된 손끝 간 거리가 0에 가까울수록(완전히 붙음) 1.0, 임계값(0.35)에
-가까울수록 0.0으로 선형 스케일링.
+**신뢰도(confidence):** 위 6개 score의 **기하평균**(하나라도 0에 가까우면 전체도 낮아지는
+"게이팅" 성질)에, 검지 또는 새끼손가락 끝의 y좌표가 0.7 미만이면 소폭(+0.05) 보너스를 더해
+0~1로 clamp. `confidence ≥ 0.6`이면 그 프레임은 조건을 만족한 것으로 판정.
 
-**상태 머신:** `idle`(손 없음) → `detecting`(손은 있으나 조건 불만족) → `holding`(조건 만족,
-경과 시간 누적) → 500ms 이상 유지되면 `triggered` 1회 발동(`fox-summon`) → 이후 1500ms
-`cooldown`. 쿨다운이 끝나면 조건이 계속 유지되고 있어도 `holding`부터 다시 시작한다(홀드 타이머
-리셋).
+**오탐 방지:**
+- **peace sign** (검지+중지 폄, 새끼 접힘): 새끼가 안 펴져 있어 "새끼 폄" score가 낮고, 중지가
+  펴져 있어 "중지 접힘" score도 낮아 이중으로 걸러짐
+- **open palm** (모든 손가락 폄): 중지·약지가 펴져 있어 "접힘" score가 낮아 걸러짐
+- **finger gun** (엄지+검지 폄): 새끼가 안 펴져 있어 "새끼 폄" score가 낮아 걸러짐
+- **rock sign** (검지+새끼 폄, 엄지가 고리를 이루지 않음): 위 6번 조건에서 걸러짐
 
-**주의:** 이전 초안에 있던 "중지·약지 접힘 + 엄지·새끼 맞닿음(여우 귀 모양)" 조건은 v4-a에서는
-구현하지 않았다. 실제 카메라 테스트 결과에 따라 이후 버전에서 더 정교한 손모양 조건으로 대체될
-수 있다.
+**상태 머신 (변경 없음):** `idle`(손 없음) → `detecting`(손은 있으나 조건 불만족) →
+`holding`(조건 만족, 경과 시간 누적) → 500ms 이상 유지되면 `triggered` 1회 발동(`fox-summon`)
+→ 이후 1500ms `cooldown`. 쿨다운이 끝나면 조건이 계속 유지되고 있어도 `holding`부터 다시
+시작한다(홀드 타이머 리셋).
 
 **시각 이펙트 개요:**
 
