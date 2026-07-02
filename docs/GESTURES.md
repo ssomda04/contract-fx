@@ -84,97 +84,373 @@ sign"으로만 표기한다.
 
 ---
 
-## 2. 핀 뽑기 변신 제스처
+## 2. Pin Pull Transform Gesture
 
-**감지 대상:** 단일 손(Hand Landmarker) + 몸(Pose Landmarker) 결합
+### User-facing description
 
-**기준점:** `neckPoint = midpoint(POSE_LEFT_SHOULDER, POSE_RIGHT_SHOULDER)` (또는 `POSE_NOSE`
-를 보조 기준으로 사용)
+사용자는 목 옆, 초커, 칼라 근처에 있는 가상의 작은 핀을 엄지와 검지로 집습니다. 이후 그 핀을
+바깥쪽 또는 살짝 뒤쪽으로 짧게 당깁니다. 이 동작은 단순한 정적 손 모양이 아니라,
+`pinch near neck → pull outward → trigger` 구조의 motion sequence입니다.
 
-**판정 조건 (2단계 시퀀스):**
+### Recognition type
 
-1. **진입(pin) 단계**: `distance(palmCentroid, neckPoint) < 0.12` — 손이 목/턱 부근에 진입.
-   이 상태를 최소 3프레임 이상 확인해 우연한 통과와 구분한다.
-2. **이탈(pull) 단계**: 진입 상태 종료 시점부터 짧은 윈도우(예: 6프레임 이내) 안에
-   `palmCentroid`가 `neckPoint`에서 멀어지는 방향으로 이동하며, 이동 속도가 임계값
-   (`|Δp| / Δt > 0.3`, 정규화 좌표 기준) 이상이어야 함 — "당겨서 뽑는" 동작.
+- motion sequence
+- hand + body pose
 
-**발동 조건:** 진입 → 이탈 시퀀스가 완료되는 순간 `pin-pull` 이벤트 1회 발동. 쿨다운 2초.
+### Required landmarks
 
-**시각 이펙트 개요:**
+HandLandmarker:
+- THUMB_TIP
+- INDEX_TIP
+- WRIST
+- palm size estimation용 MCP landmarks
 
-- 목 주변에서 폭발 파티클이 사방으로 튐.
-- 코(`POSE_NOSE`) 랜드마크를 기준 앵커로 머리 위에 자체 제작 헤드웨어를 트래킹 부착.
+PoseLandmarker:
+- LEFT_SHOULDER
+- RIGHT_SHOULDER
+- optional NOSE or MOUTH landmark
+
+### Neck position estimation
+
+- `shoulderCenter = midpoint(leftShoulder, rightShoulder)`
+- `shoulderWidth = distance(leftShoulder, rightShoulder)`
+- `neckApprox = point above shoulderCenter by shoulderWidth * 0.35`
+- face landmarks가 안정적으로 잡히면 nose/mouth와 shoulderCenter를 이용해 neckApprox를
+  보정할 수 있습니다.
+
+### Detection rules v1
+
+1. thumb tip과 index tip이 가까워 pinch 상태여야 합니다.
+2. `pinchPoint = midpoint(THUMB_TIP, INDEX_TIP)`로 계산합니다.
+3. pinchPoint가 neckApprox 근처에 있어야 합니다.
+   - `distance(pinchPoint, neckApprox) / shoulderWidth < 0.35` 정도를 초기 기준으로 사용합니다.
+4. pinch near neck 상태가 약 200ms 이상 유지되면 armed 상태로 진입합니다.
+5. armedStartPinchPoint와 armedStartTime을 저장합니다.
+6. 이후 pinchPoint가 neckApprox 또는 armedStartPinchPoint에서 바깥쪽으로 이동해야 합니다.
+7. armed 이후 150ms~800ms 안에 이동 거리가 `shoulderWidth * 0.20` 이상이면 triggered
+   상태가 됩니다.
+8. triggered 후 1500ms cooldown을 적용합니다.
+
+### State machine
+
+- idle
+- armed
+- pulling
+- triggered
+- cooldown
+
+### False positive risks
+
+- 옷깃 정리
+- 목 긁기
+- 머리카락 만지기
+- 얼굴 근처에서 우연히 pinch 모양 만들기
+- 손이 목 근처를 지나가는 동작
+
+### False positive prevention
+
+- 반드시 thumb-index pinch가 있어야 합니다.
+- 반드시 neckApprox 근처에서 시작해야 합니다.
+- 정적 자세만으로는 trigger되지 않아야 합니다.
+- 짧은 시간 안에 바깥쪽 pull motion이 있어야 합니다.
+- movement distance와 time window를 함께 사용해야 합니다.
+
+### Implementation notes
+
+- 이 제스처는 HandLandmarker만으로 구현하지 않는 것이 좋습니다.
+- PoseLandmarker 추가 후 구현하는 것이 적절합니다.
+- pinchPoint의 짧은 history buffer가 필요합니다.
+- movement direction, displacement, velocity 계산 helper가 필요합니다.
+- mirrored camera view와 handedness 처리를 주의해야 합니다.
 
 ---
 
-## 3. 체인 리코일 변신 제스처
+## 3. Chain Recoil Transform Gesture
 
-**감지 대상:** 단일 손(Hand Landmarker) + 몸(Pose Landmarker) 결합
+### User-facing description
 
-**기준점:** `chestCenter = average(LEFT_SHOULDER, RIGHT_SHOULDER, LEFT_HIP, RIGHT_HIP)`
+사용자는 가슴 중앙 또는 명치 근처에 있는 가상의 손잡이, 줄, 트리거를 쥔 것처럼 손을 둡니다.
+이후 손을 짧고 강하게 당깁니다. 이 동작은 `grip near chest → pull motion → trigger` 구조의
+motion sequence입니다.
 
-**판정 조건 (2단계 시퀀스):**
+### Difference from pin pull transform
 
-1. **진입 단계**: `distance(palmCentroid, chestCenter) < 0.12` — 손이 가슴 중앙 부근에 위치.
-   최소 3프레임 유지.
-2. **하강(pull-down) 단계**: 진입 이후 짧은 윈도우(예: 6프레임 이내) 안에 `palmCentroid.y`가
-   빠르게 증가(아래로 이동)하고, 이동 속도가 임계값(`Δy / Δt > 0.3`) 이상 — "리코일 스타터
-   줄을 아래로 당겨 시동 거는" 동작.
+Pin Pull Transform:
+- neckApprox 근처에서 시작
+- thumb-index pinch 사용
+- 작은 핀을 짧게 옆으로 뽑는 느낌
 
-**발동 조건:** 진입 → 하강 시퀀스가 완료되는 순간 `chain-pull` 이벤트 1회 발동. 쿨다운 2초.
+Chain Recoil Transform:
+- chestApprox 근처에서 시작
+- fist 또는 grip-like hand shape 사용
+- 가슴 중앙에서 손잡이/줄을 강하게 당기는 느낌
 
-**시각 이펙트 개요:**
+### Recognition type
 
-- 가슴 부위에서 스파크(전기 불꽃) 파티클이 강하게 발생.
-- 화면 전체에 짧은 잔상/블러 효과가 스치듯 표시된 후, 머리(코 랜드마크 기준)와 양팔(손목
-  랜드마크 기준)에 체인/톱날 모티프 이펙트가 부착되어 이후 움직임을 트래킹.
+- motion sequence
+- hand + body pose
+
+### Required landmarks
+
+HandLandmarker:
+- WRIST
+- INDEX_MCP
+- MIDDLE_MCP
+- RING_MCP
+- PINKY_MCP
+- INDEX_TIP
+- MIDDLE_TIP
+- RING_TIP
+- PINKY_TIP
+
+PoseLandmarker:
+- LEFT_SHOULDER
+- RIGHT_SHOULDER
+- LEFT_HIP
+- RIGHT_HIP
+
+### Chest position estimation
+
+- `shoulderCenter = midpoint(leftShoulder, rightShoulder)`
+- `hipCenter = midpoint(leftHip, rightHip)`
+- `shoulderWidth = distance(leftShoulder, rightShoulder)`
+- `chestApprox = lerp(shoulderCenter, hipCenter, 0.25)`
+
+### Hand center estimation
+
+- `handCenter = average(WRIST, INDEX_MCP, MIDDLE_MCP, RING_MCP, PINKY_MCP)`
+
+### Grip / fist-like hand detection
+
+초기 구현에서는 완벽한 주먹 판정보다 grip-like 상태를 느슨하게 잡습니다.
+
+기준:
+1. index, middle, ring, pinky 중 3개 이상이 folded 상태에 가까워야 합니다.
+2. 각 finger tip이 해당 MCP에서 멀리 뻗어 있지 않아야 합니다.
+3. finger tip들이 palm center 또는 wrist 쪽에 가까우면 folded score를 높입니다.
+
+### Detection rules v1
+
+1. fist-like 또는 grip-like hand shape를 감지합니다.
+2. handCenter가 chestApprox 근처에서 시작해야 합니다.
+   - `distance(handCenter, chestApprox) / shoulderWidth < 0.45` 정도를 초기 기준으로
+     사용합니다.
+3. grip near chest 상태가 150~300ms 유지되면 armed 상태로 진입합니다.
+4. armedStartHandCenter와 armedStartTime을 저장합니다.
+5. 이후 handCenter가 armedStartHandCenter에서 충분히 이동해야 합니다.
+6. armed 이후 150ms~900ms 안에 이동 거리가 `shoulderWidth * 0.25` 이상이면 triggered
+   상태가 됩니다.
+7. optional: velocity가 일정 threshold 이상일 때 confidence를 높입니다.
+8. triggered 후 1500ms cooldown을 적용합니다.
+
+### State machine
+
+- idle
+- armed
+- pulling
+- triggered
+- cooldown
+
+### False positive risks
+
+- 넥타이 또는 셔츠 정리
+- 가슴 긁기
+- 상체 근처에 주먹을 우연히 둔 자세
+- 걷거나 움직이며 팔이 흔들리는 상황
+- pin pull transform과의 혼동
+
+### False positive prevention
+
+- 반드시 chestApprox 근처에서 시작해야 합니다.
+- 반드시 grip/fist-like hand shape여야 합니다.
+- 정적 주먹 자세만으로는 trigger되지 않아야 합니다.
+- 짧은 pull motion이 있어야 합니다.
+- movement distance와 time window를 함께 사용해야 합니다.
+- pin pull과 구분하기 위해 neckApprox + pinch이면 pin pull로, chestApprox + grip이면 chain
+  recoil로 분류합니다.
+
+### Implementation notes
+
+- 이 제스처도 HandLandmarker만으로 구현하지 않는 것이 좋습니다.
+- PoseLandmarker 추가 후 구현하는 것이 적절합니다.
+- handCenter position history가 필요합니다.
+- displacement, velocity, moving-away-from-anchor 계산 helper가 필요합니다.
+- pin pull transform과 공통 motion-sequence utility를 공유하는 것이 좋습니다.
 
 ---
 
-## 4. 건 제스처 ("Bang")
+## 4. Finger Gun Gesture
 
-**감지 대상:** 단일 손 (Hand Landmarker)
+### User-facing description
 
-**판정 조건 — 손모양 (매 프레임):**
+사용자는 손으로 총 모양을 만듭니다. 검지는 앞으로 길게 펴고, 엄지는 위쪽 또는 대각선 위로
+펴서 총의 해머처럼 보이게 합니다. 중지, 약지, 새끼손가락은 접혀 있어야 합니다. 손끝 방향으로
+발사하는 느낌의 정적 손 모양 중심 제스처입니다.
 
-1. 엄지 폄: `THUMB_TIP`이 `INDEX_MCP`에서 충분히 멀어져 있음 (`distance(THUMB_TIP, INDEX_MCP) >
-   0.08`) — 위/정면을 향해 벌어진 권총 모양의 엄지.
-2. 검지 폄: `INDEX_TIP.y < INDEX_PIP.y`
-3. 중지 접힘: `MIDDLE_TIP.y > MIDDLE_PIP.y`
-4. 약지 접힘: `RING_TIP.y > RING_PIP.y`
-5. 새끼 접힘: `PINKY_TIP.y > PINKY_PIP.y`
+### Recognition type
 
-**판정 조건 — 반동(recoil) 모션:**
+- static hand pose
+- HandLandmarker only
 
-6. 손모양(1~5) 유지 상태에서 `INDEX_TIP.y`를 짧은 슬라이딩 윈도우(3~5프레임)로 관찰해
-   급격한 상승 후 즉시 원위치로 복귀하는 패턴을 감지: 연속 프레임에서 `Δy_1 < -0.04`
-   (위로 튐) 다음 `Δy_2 > +0.03` (원위치 복귀)이 연이어 나타나면 반동으로 판정.
+### Required landmarks
 
-**발동 조건:** 손모양이 유지되는 동안 반동 패턴이 감지되는 순간 `finger-gun-bang` 이벤트 1회
-발동. 검지 방향 벡터(`INDEX_TIP - INDEX_MCP`)를 이벤트 payload로 함께 전달. 쿨다운 800ms.
+HandLandmarker:
+- WRIST
+- THUMB_TIP
+- THUMB_IP
+- THUMB_MCP
+- INDEX_MCP
+- INDEX_PIP
+- INDEX_DIP
+- INDEX_TIP
+- MIDDLE_MCP
+- MIDDLE_PIP
+- MIDDLE_TIP
+- RING_MCP
+- RING_PIP
+- RING_TIP
+- PINKY_MCP
+- PINKY_PIP
+- PINKY_TIP
 
-**시각 이펙트 개요:**
+### Detection rules v1
 
-- 검지 손끝에서 검지 방향으로 투명 충격파 레이저(빔)가 발사됨.
-- 발사 순간 화면 전체 Screen Shake + 붉은 섬광 연출.
+1. 손이 하나 이상 감지되어야 합니다.
+2. index finger는 extended 상태여야 합니다.
+   - INDEX_TIP이 INDEX_PIP보다 손목에서 더 멀어야 합니다.
+   - INDEX_TIP이 INDEX_MCP보다 충분히 멀어야 합니다.
+3. thumb는 open 상태여야 합니다.
+   - THUMB_TIP이 palm center에서 충분히 떨어져 있어야 합니다.
+   - THUMB_TIP과 INDEX_MCP 사이 거리가 너무 가깝지 않아야 합니다.
+   - thumb direction과 index direction 사이 각도가 일정 범위 이상이면 thumb open score를
+     높입니다.
+4. middle, ring, pinky는 folded 상태여야 합니다.
+   - 각 finger tip이 해당 MCP에서 멀리 뻗어 있지 않아야 합니다.
+   - finger tip이 palm center 또는 wrist 쪽에 가까울수록 folded score가 높습니다.
+5. index direction을 계산합니다.
+   - `indexDirection = vector(INDEX_MCP → INDEX_TIP)`
+   - 이 방향은 나중에 muzzle flash 또는 impact effect 방향으로 사용할 수 있습니다.
+6. 400~600ms 정도 유지되면 triggered 상태가 됩니다.
+7. triggered 후 1000~1500ms cooldown을 적용합니다.
+
+### Optional two-hand interaction
+
+향후 확장으로, 한 손이 finger gun을 만들고 다른 손바닥을 타격 대상처럼 세우는 연출을 추가할
+수 있습니다. 하지만 v1에서는 한 손 finger gun만 구현합니다.
+
+### False positive risks
+
+- fox summon gesture와 혼동
+- open palm
+- pointing gesture
+- peace sign
+- thumb up
+- 일반적으로 검지만 펴서 가리키는 자세
+
+### False positive prevention
+
+- 검지만 펴진 pointing gesture와 구분하기 위해 thumb open 조건을 반드시 요구합니다.
+- fox summon과 구분하기 위해 pinky가 펴져 있으면 finger gun confidence를 낮춥니다.
+- peace sign과 구분하기 위해 middle finger가 펴져 있으면 finger gun으로 보지 않습니다.
+- open palm과 구분하기 위해 middle/ring/pinky folded 조건을 강하게 둡니다.
+- thumb up과 구분하기 위해 index extended 조건을 반드시 요구합니다.
+
+### Confidence score components
+
+- indexExtendedScore
+- thumbOpenScore
+- middleFoldedScore
+- ringFoldedScore
+- pinkyFoldedScore
+- antiFoxSummonScore
+- antiOpenPalmScore
+
+### Effect mapping note
+
+finger gun이 triggered되면 CSS 기반의 muzzle flash, sharp line burst, impact wave 효과를
+사용할 수 있습니다. 원작 이미지나 고유명사는 사용하지 않습니다.
+
+### Implementation notes
+
+- 이 제스처는 HandLandmarker만으로 우선 구현 가능합니다.
+- `detectFingerGun.ts`를 별도 파일로 만들 수 있습니다.
+- `useGestureEngine`은 여러 detector를 동시에 실행하고, confidence가 가장 높은 제스처를
+  선택하도록 확장하는 것이 좋습니다.
+- fox summon과 finger gun이 동시에 감지될 수 있으므로 gesture priority 또는 confidence
+  threshold를 명확히 해야 합니다.
+- indexDirection은 추후 이펙트 방향 계산에 재사용할 수 있도록 반환하는 구조를 고려합니다.
+
+---
+
+## Cross-gesture priority and conflict rules
+
+### Gesture implementation priority
+
+1. fox summon hand sign
+   - 이미 구현됨. 실제 손 모양 기준으로 v2 개선 필요.
+2. finger gun
+   - HandLandmarker만으로 구현 가능하므로 다음 구현 후보.
+3. PoseLandmarker integration
+   - pin pull과 chain recoil 구현 전 필수.
+4. pin pull transform
+   - neckApprox + pinch + pull motion.
+5. chain recoil transform
+   - chestApprox + grip + pull motion.
+
+### Conflict rules
+
+- fox summon vs finger gun:
+  - fox summon은 index + pinky extended, thumb/middle/ring loop가 핵심입니다.
+  - finger gun은 index + thumb extended, middle/ring/pinky folded가 핵심입니다.
+  - pinky가 펴져 있으면 finger gun confidence를 낮춥니다.
+  - thumb-middle-ring loop가 있으면 fox summon confidence를 높입니다.
+
+- pin pull vs chain recoil:
+  - pin pull은 neckApprox + thumb-index pinch입니다.
+  - chain recoil은 chestApprox + grip/fist-like hand입니다.
+  - 시작 anchor와 hand shape가 다르므로 별도 detector로 분리합니다.
+
+- static pose vs motion sequence:
+  - fox summon과 finger gun은 static hand pose입니다.
+  - pin pull과 chain recoil은 motion sequence입니다.
+  - motion sequence gestures는 정적 자세만으로 trigger되지 않아야 합니다.
+
+### Shared helper candidates
+
+향후 구현 시 다음 helper를 고려합니다.
+
+- distance2D
+- midpoint
+- lerp
+- normalizeDistance
+- getPalmCenter
+- estimatePalmSize
+- isFingerExtended
+- isFingerFolded
+- estimateNeckAnchor
+- estimateChestAnchor
+- trackPointHistory
+- calculateDisplacement
+- calculateVelocity
+- isMovingAwayFromAnchor
 
 ---
 
 ## 임계값 튜닝 메모
 
-위 수치(`0.05`, `0.12`, `0.3`, `0.08`, `0.04`, `0.03`, 프레임 수 등)는 모두 **초기 추정값**이며,
-v4 구현 중 실제 웹캠으로 테스트하면서 조정한다. 조정 시 이 문서도 함께 갱신한다. 특히 2번(핀 뽑기)과
-3번(체인 리코일)처럼 "진입 → 특정 방향 이동"을 판정하는 2단계 시퀀스 제스처는 상태 머신(state
-machine) 형태로 구현하는 것을 권장한다 (예: `idle → armed(진입 감지) → triggered(방향/속도 조건
-충족)`, `armed` 상태에서 일정 시간 초과 시 `idle`로 복귀). 가능하면 절대 정규화 좌표보다
-`distance(WRIST, MIDDLE_MCP)` 또는 어깨 너비(`distance(LEFT_SHOULDER, RIGHT_SHOULDER)`) 같은
-신체 크기 근사치 대비 상대값으로 임계값을 정의해, 카메라와의 거리 변화에 덜 민감하도록 개선하는
-것을 v4 후반에 검토한다.
+각 제스처 섹션에 적어둔 수치(거리 비율, ms 범위 등)는 모두 **초기 추정값**이며, 실제 웹캠으로
+테스트하면서 조정한다. 조정 시 해당 제스처 섹션을 함께 갱신한다. 2번(pin pull)과 3번(chain
+recoil)처럼 "진입(armed) → 방향성 이동(pulling) → 발동(triggered)"을 판정하는 motion sequence
+제스처는 반드시 상태 머신으로 구현한다 (`idle → armed → pulling → triggered → cooldown`,
+`armed`/`pulling` 상태에서 시간 초과 시 `idle`로 복귀). 가능하면 절대 정규화 좌표보다
+`distance(WRIST, MIDDLE_MCP)`(손 크기) 또는 `shoulderWidth`(몸통 크기) 같은 신체 크기 근사치
+대비 상대값으로 임계값을 정의해, 카메라와의 거리 변화에 덜 민감하도록 한다.
 
 ## 저작권 관련 메모
 
-위 4개 제스처는 특정 작품/캐릭터를 본떠 만들지 않은 오리지널 컨셉(여우 소환, 핀 뽑기 변신, 체인
-리코일 변신, 건 제스처)으로 정의한다. 실제 구현 시 사용하는 일러스트/3D 모델/사운드 등 아트 에셋은
-직접 제작하거나 라이선스가 명확한(공개 도메인, CC0, 구매한 에셋 등) 리소스만 사용하고, 특정 IP를
-연상시키는 이름·문구·룩앤필을 코드/에셋/커밋 메시지에 남기지 않는다.
+위 4개 제스처는 특정 작품/캐릭터를 본떠 만들지 않은 오리지널 컨셉(fox summon hand sign, pin
+pull transform, chain recoil transform, finger gun)으로 정의한다. 코드·문서·커밋 메시지에서는
+`anime-inspired`, `contract`, `transform`, `summon`, `trigger`, `pull`, `finger gun` 같은
+일반 표현만 사용하고, 특정 작품명·캐릭터명·고유명사·원작 이미지 출처는 쓰지 않는다. 실제 구현
+시 사용하는 일러스트/3D 모델/사운드 등 아트 에셋도 직접 제작하거나 라이선스가 명확한(공개
+도메인, CC0, 구매한 에셋 등) 리소스만 사용한다.
