@@ -1,9 +1,16 @@
 import { Fragment } from "react";
 import type { UseHandLandmarkerResult } from "@/hooks/useHandLandmarker";
+import type { UsePoseLandmarkerResult } from "@/hooks/usePoseLandmarker";
 import type { GestureState } from "@/lib/gestures/types";
+import {
+  estimateChestAnchor,
+  estimateNeckAnchor,
+  estimateShoulderWidth,
+} from "@/lib/gestures/bodyAnchors";
 
 interface DebugPanelProps extends UseHandLandmarkerResult {
   gesture: GestureState;
+  pose: UsePoseLandmarkerResult;
 }
 
 const STATUS_LABEL: Record<UseHandLandmarkerResult["status"], string> = {
@@ -27,8 +34,15 @@ export function DebugPanel({
   timestampMs,
   runningMode,
   gesture,
+  pose,
 }: DebugPanelProps) {
   const handDetected = (result?.landmarks.length ?? 0) > 0;
+
+  const poseLandmarks = pose.result?.landmarks[0] ?? null;
+  const poseDetected = poseLandmarks !== null;
+  const shoulderWidth = poseLandmarks ? estimateShoulderWidth(poseLandmarks) : null;
+  const neckAnchor = poseLandmarks ? estimateNeckAnchor(poseLandmarks) : null;
+  const chestAnchor = poseLandmarks ? estimateChestAnchor(poseLandmarks) : null;
 
   return (
     <div className="w-full max-w-2xl rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-xs text-zinc-300">
@@ -58,6 +72,23 @@ export function DebugPanel({
 
         <dt className="text-zinc-500">hold duration</dt>
         <dd>{gesture.holdDurationMs.toFixed(0)} ms</dd>
+      </dl>
+
+      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 border-t border-zinc-800 pt-2">
+        <dt className="text-zinc-500">pose detected</dt>
+        <dd>{poseDetected ? "true" : "false"}</dd>
+
+        <dt className="text-zinc-500">pose landmark count</dt>
+        <dd>{poseLandmarks?.length ?? 0}</dd>
+
+        <dt className="text-zinc-500">shoulderWidth</dt>
+        <dd>{shoulderWidth !== null ? shoulderWidth.toFixed(3) : "-"}</dd>
+
+        <dt className="text-zinc-500">neckApprox</dt>
+        <dd>{neckAnchor ? `${neckAnchor.x.toFixed(3)}, ${neckAnchor.y.toFixed(3)}` : "-"}</dd>
+
+        <dt className="text-zinc-500">chestApprox</dt>
+        <dd>{chestAnchor ? `${chestAnchor.x.toFixed(3)}, ${chestAnchor.y.toFixed(3)}` : "-"}</dd>
       </dl>
 
       {gesture.debug && Object.keys(gesture.debug).length > 0 && (

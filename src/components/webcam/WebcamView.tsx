@@ -2,10 +2,12 @@
 
 import { useWebcam } from "@/hooks/useWebcam";
 import { useHandLandmarker } from "@/hooks/useHandLandmarker";
+import { usePoseLandmarker } from "@/hooks/usePoseLandmarker";
 import { useGestureEngine } from "@/hooks/useGestureEngine";
 import { useEffectTrigger } from "@/hooks/useEffectTrigger";
 import { DebugPanel } from "@/components/debug/DebugPanel";
 import { LandmarkCanvas } from "@/components/overlay/LandmarkCanvas";
+import { PoseAnchorOverlay } from "@/components/overlay/PoseAnchorOverlay";
 import { EffectLayer } from "@/components/effects/EffectLayer";
 import type { ActiveEffect } from "@/lib/effects/types";
 
@@ -39,6 +41,10 @@ export function WebcamView() {
     videoRef,
     isVideoReady: status === "ready",
   });
+  const poseLandmarker = usePoseLandmarker({
+    videoRef,
+    isVideoReady: status === "ready",
+  });
   const gesture = useGestureEngine({
     result: handLandmarker.result,
     timestampMs: handLandmarker.timestampMs,
@@ -69,6 +75,7 @@ export function WebcamView() {
             }`}
           />
           <LandmarkCanvas videoRef={videoRef} result={handLandmarker.result} />
+          <PoseAnchorOverlay videoRef={videoRef} result={poseLandmarker.result} />
         </div>
         {status === "loading" && (
           <p className="absolute text-sm text-zinc-300">
@@ -83,7 +90,7 @@ export function WebcamView() {
         <EffectLayer effect={activeEffect} />
       </div>
 
-      <DebugPanel {...handLandmarker} gesture={gesture} />
+      <DebugPanel {...handLandmarker} gesture={gesture} pose={poseLandmarker} />
     </div>
   );
 }
