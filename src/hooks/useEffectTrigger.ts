@@ -3,9 +3,15 @@
 import { useState } from "react";
 import type { GestureState } from "@/lib/gestures/types";
 import { FOX_SUMMON_GESTURE_NAME } from "@/lib/gestures/detectFoxSummon";
-import type { ActiveEffect } from "@/lib/effects/types";
+import { FINGER_GUN_GESTURE_NAME } from "@/lib/gestures/detectFingerGun";
+import type { ActiveEffect, EffectName } from "@/lib/effects/types";
 
 const EFFECT_DISPLAY_DURATION_MS = 1500;
+
+const EFFECT_BY_GESTURE_NAME: Record<string, EffectName> = {
+  [FOX_SUMMON_GESTURE_NAME]: "fox-summon",
+  [FINGER_GUN_GESTURE_NAME]: "finger-gun",
+};
 
 interface UseEffectTriggerOptions {
   gesture: GestureState;
@@ -28,13 +34,18 @@ export function useEffectTrigger({
   const [activeEffect, setActiveEffect] = useState<ActiveEffect | null>(null);
   const [handledTriggerAt, setHandledTriggerAt] = useState<number | null>(null);
 
+  const effectName = gesture.currentGestureName
+    ? EFFECT_BY_GESTURE_NAME[gesture.currentGestureName]
+    : undefined;
+
   if (
     gesture.phase === "triggered" &&
     gesture.lastTriggeredAt !== null &&
-    gesture.lastTriggeredAt !== handledTriggerAt
+    gesture.lastTriggeredAt !== handledTriggerAt &&
+    effectName
   ) {
     const nextEffect: ActiveEffect = {
-      name: FOX_SUMMON_GESTURE_NAME,
+      name: effectName,
       triggeredAt: gesture.lastTriggeredAt,
     };
     setActiveEffect(nextEffect);

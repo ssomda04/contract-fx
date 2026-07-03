@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import type { UseHandLandmarkerResult } from "@/hooks/useHandLandmarker";
 import type { GestureState } from "@/lib/gestures/types";
 
@@ -58,6 +59,17 @@ export function DebugPanel({
         <dt className="text-zinc-500">hold duration</dt>
         <dd>{gesture.holdDurationMs.toFixed(0)} ms</dd>
       </dl>
+
+      {gesture.debug && Object.keys(gesture.debug).length > 0 && (
+        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 border-t border-zinc-800 pt-2 text-zinc-400">
+          {Object.entries(gesture.debug).map(([key, value]) => (
+            <Fragment key={key}>
+              <dt className="text-zinc-600">{key}</dt>
+              <dd>{value.toFixed(3)}</dd>
+            </Fragment>
+          ))}
+        </dl>
+      )}
 
       {error && <p className="mt-2 text-red-400">{error}</p>}
 

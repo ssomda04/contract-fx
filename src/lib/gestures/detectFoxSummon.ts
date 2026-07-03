@@ -39,8 +39,12 @@ const EXTENSION_PIP_MARGIN = 0.15;
 const EXTENSION_MCP_RATIO = 1.15;
 const EXTENSION_MCP_MARGIN = 0.2;
 
-/** Normalized (by hand scale) distance at/below which thumb/middle/ring tips count as "looped together". */
-const MAX_LOOP_NORMALIZED_DISTANCE = 0.35;
+/**
+ * Normalized (by hand scale) distance at/below which thumb/middle/ring tips
+ * count as "looped together". Exported so detectFingerGun's anti-fox-summon
+ * score stays consistent with what this detector itself considers a loop.
+ */
+export const MAX_LOOP_NORMALIZED_DISTANCE = 0.35;
 /** How much closer (normalized) the thumb must be to the loop than to the index tip, to rule out a rock sign. */
 const ANTI_ROCK_SIGN_MARGIN = 0.15;
 
