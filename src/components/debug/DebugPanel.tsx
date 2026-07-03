@@ -23,6 +23,8 @@ const GESTURE_PHASE_LABEL: Record<GestureState["phase"], string> = {
   idle: "idle",
   detecting: "detecting",
   holding: "holding",
+  armed: "armed",
+  pulling: "pulling",
   triggered: "triggered",
   cooldown: "cooldown",
 };

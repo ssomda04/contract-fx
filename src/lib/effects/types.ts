@@ -1,4 +1,4 @@
-export type EffectName = "fox-summon" | "finger-gun";
+export type EffectName = "fox-summon" | "finger-gun" | "pin-pull-transform";
 
 export interface ActiveEffect {
   name: EffectName;

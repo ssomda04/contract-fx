@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { HandLandmarkerResult } from "@mediapipe/tasks-vision";
+import type { HandLandmarkerResult, PoseLandmarkerResult } from "@mediapipe/tasks-vision";
 import type { GesturePhase, GestureState } from "@/lib/gestures/types";
 import {
   detectFoxSummon,
@@ -13,9 +13,15 @@ import {
   INITIAL_FINGER_GUN_BOOKKEEPING,
   type FingerGunBookkeeping,
 } from "@/lib/gestures/detectFingerGun";
+import {
+  detectPinPullTransform,
+  INITIAL_PIN_PULL_BOOKKEEPING,
+  type PinPullBookkeeping,
+} from "@/lib/gestures/detectPinPullTransform";
 
 interface UseGestureEngineOptions {
   result: HandLandmarkerResult | null;
+  poseResult: PoseLandmarkerResult | null;
   timestampMs: number | null;
 }
 
@@ -28,15 +34,18 @@ const INITIAL_GESTURE_STATE: GestureState = {
 };
 
 /**
- * Ranks candidates for display. `holding`/`triggered` (a gesture actively
- * being formed right now) outrank a different gesture's stale `cooldown`,
- * so switching shapes shows immediate progress feedback instead of hiding
- * behind the previous gesture's lockout; `cooldown` still outranks ambient
- * `detecting` noise from an unrelated hand shape. Ties fall back to confidence.
+ * Ranks candidates for display. `triggered` always wins. Any other "active"
+ * phase — a static pose `holding`, or a motion sequence `armed`/`pulling` —
+ * outranks a different gesture's stale `cooldown`, so switching shapes/
+ * motions shows immediate progress feedback instead of hiding behind the
+ * previous gesture's lockout; `cooldown` still outranks ambient `detecting`
+ * noise from an unrelated hand shape. Ties fall back to confidence.
  */
 const PHASE_PRIORITY: Record<GesturePhase, number> = {
-  triggered: 4,
-  holding: 3,
+  triggered: 5,
+  holding: 4,
+  armed: 4,
+  pulling: 4,
   cooldown: 2,
   detecting: 1,
   idle: 0,
@@ -54,17 +63,27 @@ function selectGestureState(candidates: GestureState[]): GestureState {
 }
 
 /**
- * Runs every static-pose gesture detector against each new HandLandmarker
- * frame. Each detector owns its own bookkeeping (hold timer, cooldown) and
- * runs independently of the others, so switching from one satisfied gesture
- * to another naturally resets hold duration — the previous gesture's shape
- * condition stops being met, which zeroes its own timer, while the new one
- * starts counting from the frame its shape first became satisfied. The
- * currently reported gesture is just whichever detector "wins" selection
- * this frame, recomputed during render like useEffectTrigger.
+ * Runs every gesture detector against each new HandLandmarker frame. Each
+ * detector owns its own bookkeeping (hold timer, cooldown, or the armed/pull
+ * tracking pin pull needs) and runs independently of the others, so
+ * switching from one satisfied gesture to another naturally resets progress
+ * — the previous gesture's condition stops being met, which zeroes its own
+ * state, while the new one starts counting from the frame its own condition
+ * first became satisfied. The currently reported gesture is just whichever
+ * detector "wins" selection this frame, recomputed during render like
+ * useEffectTrigger.
+ *
+ * fox summon and finger gun are static poses judged from HandLandmarker
+ * alone; pin pull is a motion sequence judged from HandLandmarker *and*
+ * PoseLandmarker together (it needs a neck anchor from pose to know where
+ * the pinch should start). `poseResult` is read fresh each call rather than
+ * driving its own recompute pass — pose runs on a slower frame-skipped
+ * cadence than hand tracking, so this simply uses whatever pose result is
+ * most recently available whenever a new hand frame arrives.
  */
 export function useGestureEngine({
   result,
+  poseResult,
   timestampMs,
 }: UseGestureEngineOptions): GestureState {
   const [gestureState, setGestureState] = useState<GestureState>(INITIAL_GESTURE_STATE);
@@ -74,17 +93,23 @@ export function useGestureEngine({
   const [fingerGunBookkeeping, setFingerGunBookkeeping] = useState<FingerGunBookkeeping>(
     INITIAL_FINGER_GUN_BOOKKEEPING
   );
+  const [pinPullBookkeeping, setPinPullBookkeeping] = useState<PinPullBookkeeping>(
+    INITIAL_PIN_PULL_BOOKKEEPING
+  );
   const [processedTimestamp, setProcessedTimestamp] = useState<number | null>(null);
 
   if (timestampMs !== null && timestampMs !== processedTimestamp) {
     const hands = result?.landmarks ?? [];
+    const poseLandmarks = poseResult?.landmarks[0] ?? null;
 
     const foxSummon = detectFoxSummon(hands, timestampMs, foxSummonBookkeeping);
     const fingerGun = detectFingerGun(hands, timestampMs, fingerGunBookkeeping);
-    const selected = selectGestureState([foxSummon.state, fingerGun.state]);
+    const pinPull = detectPinPullTransform(hands, poseLandmarks, timestampMs, pinPullBookkeeping);
+    const selected = selectGestureState([foxSummon.state, fingerGun.state, pinPull.state]);
 
     setFoxSummonBookkeeping(foxSummon.bookkeeping);
     setFingerGunBookkeeping(fingerGun.bookkeeping);
+    setPinPullBookkeeping(pinPull.bookkeeping);
     setGestureState(selected);
     setProcessedTimestamp(timestampMs);
 

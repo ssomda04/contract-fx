@@ -13,6 +13,7 @@ import {
   vectorBetween3D,
 } from "./geometry";
 import { MAX_LOOP_NORMALIZED_DISTANCE } from "./detectFoxSummon";
+import { PINCH_MAX_NORMALIZED_DISTANCE as PIN_PULL_PINCH_MAX_NORMALIZED_DISTANCE } from "./detectPinPullTransform";
 
 export const FINGER_GUN_GESTURE_NAME = "finger-gun";
 
@@ -325,6 +326,22 @@ function evaluateHandShape(hand: HandLandmarks): ShapeEvaluation {
     OPEN_PALM_SPREAD_THRESHOLD * 0.6
   );
 
+  // 6) Reject pin pull: a thumb-index pinch (picking up a small pin near the
+  //    neck) can otherwise pass every check above — the thumb is genuinely
+  //    far from the palm/index knuckle if the whole hand is reaching away
+  //    from the body, and the other fingers often curl in naturally during a
+  //    precision pinch, incidentally satisfying "folded". None of the checks
+  //    above look at thumb-to-index-*tip* distance specifically, which is the
+  //    one thing a pinch and an open "hammer" thumb never share. Reuses pin
+  //    pull's own pinch definition (with a margin) as the anti-condition,
+  //    same pattern as antiFoxSummonScore reusing its loop threshold.
+  const thumbIndexTipNormalizedDistance = distance2D(thumbTip, indexTip) / handScale;
+  const antiPinPullScore = smoothScore(
+    thumbIndexTipNormalizedDistance - PIN_PULL_PINCH_MAX_NORMALIZED_DISTANCE,
+    0,
+    PIN_PULL_PINCH_MAX_NORMALIZED_DISTANCE * 0.6
+  );
+
   // Combined via min(), not a geometric mean: these are meant as required
   // (AND) conditions. A mean lets several mediocre-but-not-zero scores
   // compound into a deceptively high confidence (observed on real camera
@@ -340,6 +357,7 @@ function evaluateHandShape(hand: HandLandmarks): ShapeEvaluation {
     pinkyFoldedScore,
     antiFoxSummonScore,
     antiOpenPalmScore,
+    antiPinPullScore,
   ];
   const confidence = clamp01(Math.min(...scores));
 
@@ -362,6 +380,8 @@ function evaluateHandShape(hand: HandLandmarks): ShapeEvaluation {
       antiFoxSummonScore,
       antiOpenPalmScore,
       spreadNormalizedDistance,
+      thumbIndexTipNormalizedDistance,
+      antiPinPullScore,
     },
   };
 }

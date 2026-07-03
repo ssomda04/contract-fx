@@ -16,7 +16,20 @@ export interface HandLandmark extends Point2D {
 /** A single detected hand's normalized landmarks, indexed as in MediaPipe HandLandmarker. */
 export type HandLandmarks = HandLandmark[];
 
-export type GesturePhase = "idle" | "detecting" | "holding" | "triggered" | "cooldown";
+/**
+ * Static-pose detectors (fox summon, finger gun) use idle/detecting/holding;
+ * motion-sequence detectors (pin pull, chain recoil) use idle/armed/pulling
+ * instead, since their precondition (e.g. pinch near neck) and their pull
+ * motion are meaningfully different stages, not a single held shape.
+ */
+export type GesturePhase =
+  | "idle"
+  | "detecting"
+  | "holding"
+  | "armed"
+  | "pulling"
+  | "triggered"
+  | "cooldown";
 
 export interface GestureState {
   currentGestureName: string | null;

@@ -104,3 +104,50 @@ body {
     opacity: 0;
   }
 }
+
+@keyframes pin-pull-spark {
+  0% {
+    transform: scale(0.5) translateY(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.2) translateY(-30px);
+    opacity: 0;
+  }
+}
+
+@keyframes pin-pull-ring {
+  0% {
+    transform: scale(0.3);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@keyframes pin-pull-text {
+  0% {
+    transform: scale(0.8) translateY(6px);
+    opacity: 0;
+  }
+  20% {
+    transform: scale(1.05) translateY(0);
+    opacity: 1;
+  }
+  35% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) translateY(-4px);
+    opacity: 0;
+  }
+}

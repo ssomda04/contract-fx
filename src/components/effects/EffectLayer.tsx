@@ -12,6 +12,7 @@ interface EffectLayerProps {
 const EFFECT_VISUALS: Record<EffectName, () => React.ReactNode> = {
   "fox-summon": FoxSummonVisual,
   "finger-gun": FingerGunVisual,
+  "pin-pull-transform": PinPullTransformVisual,
 };
 
 const MUZZLE_BURST_ANGLES_DEG = [0, 45, 90, 135, 180, 225, 270, 315];
@@ -64,6 +65,23 @@ function FingerGunVisual() {
         {/* impact wave */}
         <span className="absolute inset-0 animate-[finger-gun-impact_0.6s_ease-out_forwards] rounded-full border-2 border-amber-100/70" />
       </div>
+    </div>
+  );
+}
+
+function PinPullTransformVisual() {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center">
+      <div className="relative flex h-48 w-48 items-center justify-center sm:h-64 sm:w-64">
+        {/* pull spark */}
+        <span className="absolute h-3 w-3 animate-[pin-pull-spark_0.5s_ease-out_forwards] rounded-full bg-fuchsia-200 [box-shadow:0_0_30px_10px_rgba(232,121,249,0.8)]" />
+        {/* shock rings */}
+        <span className="absolute inset-0 animate-[pin-pull-ring_0.7s_ease-out_forwards] rounded-full border-2 border-fuchsia-300/70" />
+        <span className="absolute inset-8 animate-[pin-pull-ring_0.7s_ease-out_forwards] rounded-full border border-fuchsia-200/50 [animation-delay:100ms]" />
+      </div>
+      <p className="absolute animate-[pin-pull-text_1.2s_ease-out_forwards] text-lg font-bold tracking-[0.3em] text-fuchsia-100 [text-shadow:0_0_16px_rgba(232,121,249,0.9)] sm:text-xl">
+        PIN PULL
+      </p>
     </div>
   );
 }

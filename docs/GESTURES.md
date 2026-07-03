@@ -127,8 +127,10 @@ PoseLandmarker:
 4. pinch near neck 상태가 약 200ms 이상 유지되면 armed 상태로 진입합니다.
 5. armedStartPinchPoint와 armedStartTime을 저장합니다.
 6. 이후 pinchPoint가 neckApprox 또는 armedStartPinchPoint에서 바깥쪽으로 이동해야 합니다.
-7. armed 이후 150ms~800ms 안에 이동 거리가 `shoulderWidth * 0.20` 이상이면 triggered
-   상태가 됩니다.
+7. armed 이후 150ms~1200ms 안에 이동 거리가 `shoulderWidth * 0.15` 이상이면 triggered
+   상태가 됩니다. (v1 구현 시 800ms/0.20 기준으로 시작했으나, 실제 카메라 테스트에서 "armed
+   진입 후 당길지 결정하는" 반응 시간까지 포함하면 800ms가 너무 빠듯하다는 것이 확인되어
+   완화했다.)
 8. triggered 후 1500ms cooldown을 적용합니다.
 
 ### State machine
@@ -354,6 +356,12 @@ HandLandmarker:
 - peace sign과 구분하기 위해 middle finger가 펴져 있으면 finger gun으로 보지 않습니다.
 - open palm과 구분하기 위해 middle/ring/pinky folded 조건을 강하게 둡니다.
 - thumb up과 구분하기 위해 index extended 조건을 반드시 요구합니다.
+- **pin pull과 구분**: thumb open 조건(팜/검지 knuckle 대비 거리, 각도)만으로는 목 근처에서
+  엄지-검지 pinch를 하는 pin pull 동작과 구분되지 않는 경우가 실제 카메라 테스트에서 확인됐다
+  (손 전체가 몸에서 멀리 뻗어 있으면 엄지가 팜/검지 knuckle 기준으로는 "충분히 멀다"고 읽히고,
+  pinch 특성상 중지/약지/새끼가 자연스럽게 접히기도 함). `THUMB_TIP`과 `INDEX_TIP` 사이 거리가
+  pin pull이 pinch로 인정하는 범위(`PINCH_MAX_NORMALIZED_DISTANCE`, 현재 0.35) 근처거나 그보다
+  가까우면 finger gun confidence를 낮추는 `antiPinPullScore`를 추가했다.
 
 ### Confidence score components
 
@@ -364,6 +372,7 @@ HandLandmarker:
 - pinkyFoldedScore
 - antiFoxSummonScore
 - antiOpenPalmScore
+- antiPinPullScore
 
 ### Effect mapping note
 
@@ -409,6 +418,13 @@ finger gun이 triggered되면 CSS 기반의 muzzle flash, sharp line burst, impa
   - pin pull은 neckApprox + thumb-index pinch입니다.
   - chain recoil은 chestApprox + grip/fist-like hand입니다.
   - 시작 anchor와 hand shape가 다르므로 별도 detector로 분리합니다.
+
+- pin pull vs finger gun:
+  - 실제 카메라 테스트에서 목 근처 pinch 동작이 finger gun으로도 잘못 인식되는 문제가
+    확인됐다 — finger gun의 thumb open 조건은 엄지가 "팜/검지 knuckle" 기준으로 멀리 있는지만
+    보고, 엄지 끝과 검지 끝 사이 거리는 보지 않기 때문에 pinch와 우연히 양립할 수 있다.
+  - finger gun 쪽에 `antiPinPullScore`(엄지-검지 tip 거리가 pin pull의 pinch 기준 이하면
+    감점)를 추가해 구분한다.
 
 - static pose vs motion sequence:
   - fox summon과 finger gun은 static hand pose입니다.

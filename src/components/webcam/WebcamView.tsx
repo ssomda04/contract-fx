@@ -47,6 +47,7 @@ export function WebcamView() {
   });
   const gesture = useGestureEngine({
     result: handLandmarker.result,
+    poseResult: poseLandmarker.result,
     timestampMs: handLandmarker.timestampMs,
   });
   const activeEffect = useEffectTrigger({
