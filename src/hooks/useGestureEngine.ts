@@ -18,6 +18,11 @@ import {
   INITIAL_PIN_PULL_BOOKKEEPING,
   type PinPullBookkeeping,
 } from "@/lib/gestures/detectPinPullTransform";
+import {
+  detectChainRecoilTransform,
+  INITIAL_CHAIN_RECOIL_BOOKKEEPING,
+  type ChainRecoilBookkeeping,
+} from "@/lib/gestures/detectChainRecoilTransform";
 
 interface UseGestureEngineOptions {
   result: HandLandmarkerResult | null;
@@ -74,12 +79,13 @@ function selectGestureState(candidates: GestureState[]): GestureState {
  * useEffectTrigger.
  *
  * fox summon and finger gun are static poses judged from HandLandmarker
- * alone; pin pull is a motion sequence judged from HandLandmarker *and*
- * PoseLandmarker together (it needs a neck anchor from pose to know where
- * the pinch should start). `poseResult` is read fresh each call rather than
- * driving its own recompute pass — pose runs on a slower frame-skipped
- * cadence than hand tracking, so this simply uses whatever pose result is
- * most recently available whenever a new hand frame arrives.
+ * alone; pin pull and chain recoil are motion sequences judged from
+ * HandLandmarker *and* PoseLandmarker together (each needs its own body
+ * anchor — neck or chest — from pose to know where its precondition should
+ * start). `poseResult` is read fresh each call rather than driving its own
+ * recompute pass — pose runs on a slower frame-skipped cadence than hand
+ * tracking, so this simply uses whatever pose result is most recently
+ * available whenever a new hand frame arrives.
  */
 export function useGestureEngine({
   result,
@@ -96,6 +102,9 @@ export function useGestureEngine({
   const [pinPullBookkeeping, setPinPullBookkeeping] = useState<PinPullBookkeeping>(
     INITIAL_PIN_PULL_BOOKKEEPING
   );
+  const [chainRecoilBookkeeping, setChainRecoilBookkeeping] = useState<ChainRecoilBookkeeping>(
+    INITIAL_CHAIN_RECOIL_BOOKKEEPING
+  );
   const [processedTimestamp, setProcessedTimestamp] = useState<number | null>(null);
 
   if (timestampMs !== null && timestampMs !== processedTimestamp) {
@@ -105,11 +114,23 @@ export function useGestureEngine({
     const foxSummon = detectFoxSummon(hands, timestampMs, foxSummonBookkeeping);
     const fingerGun = detectFingerGun(hands, timestampMs, fingerGunBookkeeping);
     const pinPull = detectPinPullTransform(hands, poseLandmarks, timestampMs, pinPullBookkeeping);
-    const selected = selectGestureState([foxSummon.state, fingerGun.state, pinPull.state]);
+    const chainRecoil = detectChainRecoilTransform(
+      hands,
+      poseLandmarks,
+      timestampMs,
+      chainRecoilBookkeeping
+    );
+    const selected = selectGestureState([
+      foxSummon.state,
+      fingerGun.state,
+      pinPull.state,
+      chainRecoil.state,
+    ]);
 
     setFoxSummonBookkeeping(foxSummon.bookkeeping);
     setFingerGunBookkeeping(fingerGun.bookkeeping);
     setPinPullBookkeeping(pinPull.bookkeeping);
+    setChainRecoilBookkeeping(chainRecoil.bookkeeping);
     setGestureState(selected);
     setProcessedTimestamp(timestampMs);
 

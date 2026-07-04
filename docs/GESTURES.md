@@ -227,9 +227,14 @@ PoseLandmarker:
 초기 구현에서는 완벽한 주먹 판정보다 grip-like 상태를 느슨하게 잡습니다.
 
 기준:
-1. index, middle, ring, pinky 중 3개 이상이 folded 상태에 가까워야 합니다.
+1. index, middle, ring, pinky 중 3개 이상이 folded 상태에 가까워야 합니다 (4개 중 3번째로 높은
+   점수를 그리프 점수로 사용 — 완전한 주먹이 아니어도 통과하고, 열린 손바닥처럼 4개 다 낮으면
+   자동으로 낮게 나옵니다).
 2. 각 finger tip이 해당 MCP에서 멀리 뻗어 있지 않아야 합니다.
 3. finger tip들이 palm center 또는 wrist 쪽에 가까우면 folded score를 높입니다.
+   (구현 메모: 2번과 3번을 AND로 요구하면 index/pinky처럼 자기 MCP 자체가 palm 중심에서
+   먼 손가락이 실제로 접혀도 오탐 거부되는 문제가 있어, 둘 중 하나만 만족해도 folded로 보는
+   OR(=max)로 구현했습니다.)
 
 ### Detection rules v1
 

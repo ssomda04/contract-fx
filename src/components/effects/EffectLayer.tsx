@@ -13,7 +13,10 @@ const EFFECT_VISUALS: Record<EffectName, () => React.ReactNode> = {
   "fox-summon": FoxSummonVisual,
   "finger-gun": FingerGunVisual,
   "pin-pull-transform": PinPullTransformVisual,
+  "chain-recoil-transform": ChainRecoilTransformVisual,
 };
+
+const CHAIN_SLASH_ANGLES_DEG = [-20, 0, 20];
 
 const MUZZLE_BURST_ANGLES_DEG = [0, 45, 90, 135, 180, 225, 270, 315];
 
@@ -81,6 +84,32 @@ function PinPullTransformVisual() {
       </div>
       <p className="absolute animate-[pin-pull-text_1.2s_ease-out_forwards] text-lg font-bold tracking-[0.3em] text-fuchsia-100 [text-shadow:0_0_16px_rgba(232,121,249,0.9)] sm:text-xl">
         PIN PULL
+      </p>
+    </div>
+  );
+}
+
+function ChainRecoilTransformVisual() {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center">
+      <div className="relative flex h-56 w-56 items-center justify-center sm:h-72 sm:w-72">
+        {/* recoil burst */}
+        <span className="absolute h-8 w-8 animate-[chain-recoil-burst_0.35s_ease-out_forwards] rounded-full bg-orange-200 [box-shadow:0_0_60px_20px_rgba(254,215,170,0.8)]" />
+        {/* chain slashes */}
+        {CHAIN_SLASH_ANGLES_DEG.map((deg) => (
+          <span
+            key={deg}
+            className="absolute left-1/2 top-1/2 h-1 w-0"
+            style={{ transform: `translate(-50%, -50%) rotate(${deg}deg)` }}
+          >
+            <span className="absolute left-0 top-0 h-1 w-32 origin-left animate-[chain-recoil-slash_0.4s_ease-out_forwards] rounded-full bg-orange-100/90 sm:w-44" />
+          </span>
+        ))}
+        {/* impact shock */}
+        <span className="absolute inset-0 animate-[chain-recoil-shock_0.65s_ease-out_forwards] rounded-full border-4 border-orange-200/70" />
+      </div>
+      <p className="absolute animate-[chain-recoil-text_1.2s_ease-out_forwards] text-lg font-bold tracking-[0.3em] text-orange-100 [text-shadow:0_0_16px_rgba(254,215,170,0.9)] sm:text-xl">
+        CHAIN RECOIL
       </p>
     </div>
   );
